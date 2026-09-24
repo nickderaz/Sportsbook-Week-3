@@ -316,6 +316,15 @@
 
     function loadSavedState() {
       try {
+        // ONE-TIME RESET: Wipes out existing saved state for old visitors
+        if (!localStorage.getItem('ff_sportsbook_v2_initialized')) {
+          localStorage.removeItem('ff_sportsbook_bets');
+          localStorage.removeItem('ff_sportsbook_placed_bets');
+          localStorage.removeItem('ff_sportsbook_wager');
+          localStorage.removeItem('ff_sportsbook_bankroll');
+          localStorage.setItem('ff_sportsbook_v2_initialized', 'true');
+        }
+
         const savedBets = localStorage.getItem('ff_sportsbook_bets');
         if (savedBets) selectedBets = JSON.parse(savedBets);
 
@@ -333,6 +342,7 @@
         }
       } catch (e) {
         console.error("Error loading saved state:", e);
+        bankroll = 20.00;
       }
 
       document.getElementById('wagerInputDesktop').value = wagerAmount;
@@ -667,50 +677,45 @@
         const isParlay = ticket.bets.length > 1;
 
         return `
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all">
-            <!-- Ticket Top Header -->
-            <div class="bg-slate-950/80 px-5 py-3 border-b border-slate-800/80 flex items-center justify-between gap-2 text-xs">
-              <div class="flex items-center space-x-3">
-                <span class="font-mono font-bold text-blue-400">${ticket.ticketId}</span>
-                <span class="text-slate-500">•</span>
-                <span class="text-slate-400"><i class="fa-regular fa-clock mr-1"></i>${ticket.placedAt}</span>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
+              <div class="flex items-center space-x-2">
+                <span class="bg-blue-950 text-blue-400 border border-blue-800/60 font-black text-xs px-2.5 py-1 rounded-md uppercase">
+                  ${isParlay ? `Parlay (${ticket.bets.length} Legs)` : 'Single Bet'}
+                </span>
+                <span class="text-xs text-slate-400 font-medium">${ticket.placedAt}</span>
               </div>
-              <span class="bg-slate-800 text-slate-300 font-bold px-2.5 py-1 rounded-md border border-slate-700">
-                ${isParlay ? `Parlay (${ticket.bets.length} Legs)` : 'Single'}
-              </span>
+              <div class="text-xs text-slate-500 font-mono">
+                ID: <span class="text-slate-300 font-bold">${ticket.ticketId}</span>
+              </div>
             </div>
 
-            <!-- Ticket Legs -->
-            <div class="p-5 space-y-3">
+            <div class="space-y-2.5">
               ${ticket.bets.map(b => `
-                <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800/80 flex justify-between items-center text-sm">
+                <div class="bg-slate-950 p-3 rounded-xl border border-slate-800/80 flex justify-between items-center text-xs">
                   <div>
                     <div class="flex items-center space-x-2">
-                      <span class="text-xs font-extrabold text-blue-400 bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800/40">${b.type}</span>
-                      <span class="font-bold text-white">${b.teamName}</span>
+                      <span class="font-bold text-white text-sm">${b.teamName}</span>
+                      <span class="text-emerald-400 font-bold">${b.odds}</span>
                     </div>
-                    <p class="text-xs text-slate-400 mt-1">Pick: <span class="text-slate-200 font-semibold">${b.detail}</span></p>
-                  </div>
-                  <div class="font-extrabold text-emerald-400 text-sm">
-                    ${b.odds}
+                    <p class="text-slate-400 mt-0.5">${b.type}: <span class="text-slate-200 font-semibold">${b.detail}</span></p>
                   </div>
                 </div>
               `).join('')}
             </div>
 
-            <!-- Ticket Footer -->
-            <div class="bg-slate-950 px-5 py-3 border-t border-slate-800 flex items-center justify-between text-xs">
+            <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 flex justify-between items-center text-xs font-semibold">
               <div>
-                <p class="text-slate-400">Wager</p>
-                <p class="text-base font-bold text-white">$${ticket.wager.toFixed(2)}</p>
+                <span class="text-slate-400">Total Wager: </span>
+                <span class="text-white font-bold">$${ticket.wager.toFixed(2)}</span>
               </div>
               <div>
-                <p class="text-slate-400">Total Odds</p>
-                <p class="text-base font-bold text-blue-400">${ticket.combinedOdds}</p>
+                <span class="text-slate-400">Total Odds: </span>
+                <span class="text-emerald-400 font-bold">${ticket.combinedOdds}</span>
               </div>
-              <div class="text-right">
-                <p class="text-slate-400">Potential Payout</p>
-                <p class="text-base font-black text-emerald-400">$${ticket.potentialPayout.toFixed(2)}</p>
+              <div>
+                <span class="text-slate-400">Potential Payout: </span>
+                <span class="text-emerald-400 font-bold">$${ticket.potentialPayout.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -722,18 +727,17 @@
       const drawer = document.getElementById('mobileBetSlipDrawer');
       if (open) {
         drawer.classList.remove('opacity-0', 'pointer-events-none');
-        drawer.classList.add('opacity-100');
       } else {
         drawer.classList.add('opacity-0', 'pointer-events-none');
-        drawer.classList.remove('opacity-100');
       }
     }
 
-    function showToast(msg, type = 'success') {
+    function showToast(message, type = 'success') {
       const toast = document.getElementById('toast');
       const toastMsg = document.getElementById('toastMessage');
-      toastMsg.innerText = msg;
-
+      
+      toastMsg.innerText = message;
+      
       if (type === 'error') {
         toast.firstElementChild.className = "bg-red-600 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 font-semibold text-sm border border-red-400";
       } else if (type === 'info') {
@@ -748,7 +752,7 @@
       setTimeout(() => {
         toast.classList.remove('translate-y-0', 'opacity-100');
         toast.classList.add('translate-y-20', 'opacity-0');
-      }, 3500);
+      }, 3000);
     }
   </script>
 </body>
